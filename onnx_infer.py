@@ -5,6 +5,7 @@ import time
 import random
 import onnxruntime
 import numpy as np
+import argparse
 
 def collect_images(data_dir):
     images = [[cv2.imread(path, 1), os.path.basename(path), path] for path in sorted(glob.glob(os.path.join(data_dir, "*.jpg")))]
@@ -41,14 +42,12 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=False, scal
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh)
 
-
 def clip_coords(boxes, img_shape):
     # Clip bounding xyxy bounding boxes to image shape (height, width)
     boxes[:, 0] = np.clip(boxes[:, 0], a_min=0, a_max=img_shape[1])  # x1
     boxes[:, 1] = np.clip(boxes[:, 1], a_min=0, a_max=img_shape[0])  # y1
     boxes[:, 2] = np.clip(boxes[:, 2], a_min=0, a_max=img_shape[1])  # x2
     boxes[:, 3] = np.clip(boxes[:, 3], a_min=0, a_max=img_shape[0])  # y2
-
 
 def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     # Rescale coords (xyxy) from img1_shape to img0_shape
@@ -64,7 +63,6 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     coords[:, :4] /= gain
     clip_coords(coords, img0_shape)
     return coords
-
 
 def data_preprocess(img0, img_size):
     # Padded resize
@@ -139,6 +137,7 @@ def nms_numpy(boxes, scores, iou_thres):
         sorted_indices=[sorted_indices[i] for i in range(n) if iou[i]<=iou_thres]
     return np.array(output)
 
+
 def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.2,agnostic=False):
     """Performs Non-Maximum Suppression (NMS) on inference results
     Returns:
@@ -210,71 +209,70 @@ def sigmoid(x):
     '''
     return np.tanh(x*0.5)*0.5+0.5
 
-input_size = 640
-sess = onnxruntime.InferenceSession('best.onnx')
-input_name = sess.get_inputs()[0].name
-output_names = []
-for i in range(len(sess.get_outputs())):
-    print('output shape:', sess.get_outputs()[i].name)
-    output_names.append(sess.get_outputs()[i].name)
 
-output_name = sess.get_outputs()[0].name
-print('input name:%s, output name:%s' % (input_name, output_name))
-input_shape = sess.get_inputs()[0].shape
-print('input_shape:', input_shape)
+def main(arg):
+    input_size = 640
+    sess = onnxruntime.InferenceSession(arg.onnx_path)
+    input_name = sess.get_inputs()[0].name
+    output_names = []
+    for i in range(len(sess.get_outputs())):
+        print('output shape:', sess.get_outputs()[i].name)
+        output_names.append(sess.get_outputs()[i].name)
 
-names = ['head']
-colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
+    output_name = sess.get_outputs()[0].name
+    print('input name:%s, output name:%s' % (input_name, output_name))
+    input_shape = sess.get_inputs()[0].shape
+    print('input_shape:', input_shape)
 
-save_img = True
-out = './output'
-data_dir = "../../human_head_dataset/images/val"
-images = collect_images(data_dir)
-strides=[32.,16.,8.]
-anchor_grid=np.array([[[28,30],[36,35],[45,47]],[[19,25],[23,20],[23,29]],[[11,14],[16,20],[16,16]]],
-                     dtype=np.float).reshape((3,1,-1,1,1,2))
+    names = ['head']
+    colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(len(names))]
+    images = collect_images(arg.data_dir)
+    strides=[32.,16.,8.]
+    anchor_grid=np.array([[[28,30],[36,35],[45,47]],[[19,25],[23,20],[23,29]],[[11,14],[16,20],[16,16]]],
+                         dtype=np.float).reshape((3,1,-1,1,1,2))
 
-for i in range(0, len(images)):
-    if i >= (len(images) - 1):
-        print("[INFO] Over.")
-        break
-    im0, fname0, path = images[i]
-    print(path, fname0, ' shape:', im0.shape)
-    img = im0.copy()
-    image_tensor = data_preprocess(im0, input_size)
-    print("[INFO] image batch shape:", image_tensor.shape)
-    s = time.time()
-    preds = sess.run(output_names, {input_name: image_tensor})
-    output=[]
-    for i,pred in enumerate(preds):
-        bs, _, ny, nx,_ = pred.shape
-        grid=make_grid(nx,ny)
-        pred=sigmoid(pred)
-        pred[...,0:2]=(pred[...,0:2]*2.-0.5+grid)*strides[i]
-        pred[...,2:4]=(pred[...,2:4]*2)**2*anchor_grid[i]
-        output.append(pred)
-    preds = np.concatenate([pred.reshape((1, -1, 6)) for pred in output], axis=1)
-    # post processing (nms)
-    # Process detections
-    preds=non_max_suppression(preds)
-    for i, det in enumerate(preds):  # detections per image
-        p = path,
-        s = ''
-        save_path = os.path.join(out, fname0)
-        s += '%gx%g ' % img.shape[:2]  # print string
-        print(s)
-        if det is not None and len(det):
-            # Rescale boxes from img_size to im0 size
-            det[:, :4] = scale_coords(image_tensor[0].shape[1:], det[:, :4], im0.shape).round()
-            for c in np.unique(det[:, -1]):
-                n = (det[:, -1] == c).sum()  # detections per class
-                s += '%g %ss, ' % (n, names[int(c)])  # add to string
-            # Write results
-            # img=image_tensor[0].transpose(1,2,0)*255
-            # img=img[:,:,::-1]
-            # img = np.ascontiguousarray(img)
-            for *xyxy, conf, cls in det:
-                if save_img:  # Add bbox to image
+    for i in range(0, len(images)):
+        if i >= (len(images) - 1):
+            print("[INFO] Over.")
+            break
+        im0, fname0, path = images[i]
+        print(path, fname0, ' shape:', im0.shape)
+        image_tensor = data_preprocess(im0, input_size)
+        print("[INFO] image batch shape:", image_tensor.shape)
+        s = time.time()
+        preds = sess.run(output_names, {input_name: image_tensor})
+        output=[]
+        for i,pred in enumerate(preds):
+            bs, _, ny, nx,_ = pred.shape
+            grid=make_grid(nx,ny)
+            pred=sigmoid(pred)
+            pred[...,0:2]=(pred[...,0:2]*2.-0.5+grid)*strides[i]
+            pred[...,2:4]=(pred[...,2:4]*2)**2*anchor_grid[i]
+            output.append(pred)
+        preds = np.concatenate([pred.reshape((1, -1, 6)) for pred in output], axis=1)
+        # post processing (nms)
+        # Process detections
+        preds=non_max_suppression(preds)
+        for i, det in enumerate(preds):  # detections per image
+            save_path = os.path.join(arg.out_path, fname0)
+            if det is not None and len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(image_tensor[0].shape[1:], det[:, :4], im0.shape).round()
+                for c in np.unique(det[:, -1]):
+                    n = (det[:, -1] == c).sum()  # detections per class
+                    s += '%g %ss, ' % (n, names[int(c)])  # add to string
+                # Write results
+                for *xyxy, conf, cls in det:
                     label = '%s %.2f' % (names[int(cls)], conf)
                     plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
-            cv2.imwrite(save_path,im0)
+                cv2.imwrite(save_path,im0)
+
+
+if  __name__ == '__main__':
+    parser=argparse.ArgumentParser('detector')
+    parser.add_argument('--onnx_path',type=str,default='best.onnx',help='the path of onnx model')
+    parser.add_argument('--data_dir',type=str,default='input',help='the direction of images')
+    parser.add_argument('--out_path',type=str,default='output',help='the path of output')
+
+    arg=parser.parse_args()
+    main(arg)
