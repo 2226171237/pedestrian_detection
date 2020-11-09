@@ -1,4 +1,4 @@
-# Visitor flow detection in scenic spots by using onnxruntime
+# Pedestrian detection in scenic spots by using onnxruntime
 Use pytorch1.5 to train yolov5 and export the onnx model. Use onnxruntime to run the onnx model on the cpu.
 yolov5 refers to https://github.com/ultralytics/yolov5
 * Face detection model: yolov5 
