@@ -7,7 +7,7 @@ yolov5 refers to https://github.com/ultralytics/yolov5
     * numpy
     * onnxruntime-1.5.2 (cpu)
 
-* onnx model: download from  https://drive.google.com/file/d/1jCT7-dpeHhCJ0DBrx4e1Vap9EFaguZs3/view?usp=sharing
+* ~~onnx model: download from  https://drive.google.com/file/d/1jCT7-dpeHhCJ0DBrx4e1Vap9EFaguZs3/view?usp=sharing~~
 * run:
 ``` shell script
     python onnx_infer.py --onnx_path=./best.onnx --data_dir=./input
