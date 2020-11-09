@@ -11,3 +11,6 @@ yolov5 refers to https://github.com/ultralytics/yolov5
 * run:
 ``` shell script
     python onnx_infer.py --onnx_path=./best.onnx --data_dir=./input
+```
+* result
+    ![](./output/1.jpg)

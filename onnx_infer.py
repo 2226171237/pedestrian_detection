@@ -258,9 +258,6 @@ def main(arg):
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(image_tensor[0].shape[1:], det[:, :4], im0.shape).round()
-                for c in np.unique(det[:, -1]):
-                    n = (det[:, -1] == c).sum()  # detections per class
-                    s += '%g %ss, ' % (n, names[int(c)])  # add to string
                 # Write results
                 for *xyxy, conf, cls in det:
                     label = '%s %.2f' % (names[int(cls)], conf)
